@@ -445,14 +445,21 @@ function initializeSessionMonitoring(sessionData) {
  * Update session status indicators
  */
 function updateSessionStatus(status) {
-  document.getElementById('sessionTokenStatus').textContent = status.tokenStatus;
-  document.getElementById('deviceBindingStatus').textContent = status.deviceBinding;
+  // Add safety checks for undefined values
+  if (!status) {
+    console.warn('Status object is undefined');
+    return;
+  }
+  
+  document.getElementById('sessionTokenStatus').textContent = status.tokenStatus || 'Unknown';
+  document.getElementById('deviceBindingStatus').textContent = status.deviceBinding || 'Unknown';
   
   const riskElement = document.getElementById('riskLevelStatus');
-  riskElement.textContent = status.riskLevel;
-  riskElement.className = `stat-value badge-${status.riskLevel.toLowerCase()}`;
+  const riskLevel = status.riskLevel || 'UNKNOWN';
+  riskElement.textContent = riskLevel;
+  riskElement.className = `stat-value badge-${riskLevel.toLowerCase()}`;
   
-  document.getElementById('lastActivityStatus').textContent = status.lastActivity;
+  document.getElementById('lastActivityStatus').textContent = status.lastActivity || 'Unknown';
   document.getElementById('lastActivityStatus').classList.add('updating');
   setTimeout(() => {
     document.getElementById('lastActivityStatus').classList.remove('updating');
@@ -523,7 +530,7 @@ async function loadActiveSessions() {
       updateSessionStatus({
         tokenStatus: 'Active',
         deviceBinding: 'Verified',
-        riskLevel: data.currentSession.riskLevel,
+        riskLevel: data.currentSession.riskLevel || 'LOW',
         lastActivity: 'Just now'
       });
     }
