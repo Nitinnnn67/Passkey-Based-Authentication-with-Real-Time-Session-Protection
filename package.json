@@ -9,6 +9,7 @@
     "server": "nodemon server/server.js",
     "client": "vite",
     "build": "vite build",
+    "postinstall": "npm run build",
     "init-db": "node server/database/init.js",
     "start": "NODE_ENV=production node server/server.js"
   },

@@ -43,14 +43,20 @@ app.use(session({
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../dist');
-  app.use(express.static(distPath));
+  const clientPath = path.join(__dirname, '../client');
+  
+  // Check if dist folder exists, otherwise use client folder
+  const staticPath = require('fs').existsSync(distPath) ? distPath : clientPath;
+  
+  console.log(`📁 Serving static files from: ${staticPath}`);
+  app.use(express.static(staticPath));
   
   // Serve index.html for all non-API routes
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) {
       return next();
     }
-    res.sendFile(path.join(distPath, 'index.html'));
+    res.sendFile(path.join(staticPath, 'index.html'));
   });
 }
 
