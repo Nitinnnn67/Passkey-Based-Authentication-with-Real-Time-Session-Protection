@@ -4,6 +4,7 @@ import session from 'express-session';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import authRoutes from './routes/auth.js';
 import logsRoutes from './routes/logs.js';
 import './database/db.js'; // Initialize database
@@ -46,7 +47,7 @@ if (process.env.NODE_ENV === 'production') {
   const clientPath = path.join(__dirname, '../client');
   
   // Check if dist folder exists, otherwise use client folder
-  const staticPath = require('fs').existsSync(distPath) ? distPath : clientPath;
+  const staticPath = fs.existsSync(distPath) ? distPath : clientPath;
   
   console.log(`📁 Serving static files from: ${staticPath}`);
   app.use(express.static(staticPath));
