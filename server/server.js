@@ -42,15 +42,15 @@ app.use(session({
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
-  const clientPath = path.join(__dirname, '../client');
-  app.use(express.static(clientPath));
+  const distPath = path.join(__dirname, '../dist');
+  app.use(express.static(distPath));
   
   // Serve index.html for all non-API routes
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/')) {
       return next();
     }
-    res.sendFile(path.join(clientPath, 'index.html'));
+    res.sendFile(path.join(distPath, 'index.html'));
   });
 }
 

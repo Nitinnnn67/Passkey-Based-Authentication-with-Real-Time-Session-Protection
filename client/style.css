@@ -468,7 +468,9 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 100%
+  width: 100%;
+}
+
 .stat-info {
   flex: 1;
   display: flex;
@@ -572,8 +574,6 @@ h1 {
 .event-item.warning {
   border-left-color: var(--warning);
   background: #f59e0b10;
-}
-
   margin-bottom: 24px; /* Add space at bottom */
 }
 
