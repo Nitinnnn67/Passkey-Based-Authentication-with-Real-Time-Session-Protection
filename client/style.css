@@ -511,7 +511,7 @@ h1 {
 
 .session-events h4 {
   margin-bottom: 12px;
-  font-size: 1300px; /* Increased from 200px */
+  font-size: 13px; /* Increased from 200px */
   overflow-y: auto;
   display: flex;
   flex-direction: column;
