@@ -10,7 +10,7 @@
     "client": "vite",
     "build": "vite build",
     "init-db": "node server/database/init.js",
-    "start": "node server/server.js"
+    "start": "NODE_ENV=production node server/server.js"
   },
   "keywords": ["passkey", "webauthn", "authentication", "security"],
   "author": "",
