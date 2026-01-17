@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Passkey Authentication System</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Login Screen -->
+    <div id="loginScreen" class="screen active">
+      <div class="card">
+        <h1>🔐 Secure Login</h1>
+        <p class="subtitle">Passkey-Based Authentication</p>
+        
+        <div class="login-methods">
+          <button id="passkeyLoginBtn" class="btn btn-primary">
+            <span class="icon">🔑</span>
+            Login with Passkey
+          </button>
+          
+          <div class="divider">
+            <span>OR</span>
+          </div>
+          
+          <button id="otpLoginBtn" class="btn btn-secondary">
+            <span class="icon">📱</span>
+            Login with OTP (Fallback)
+          </button>
+        </div>
+        
+        <div class="info-box">
+          <p>✨ <strong>New User?</strong> Register with passkey for seamless authentication</p>
+          <button id="registerBtn" class="btn btn-link">Create Account</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Registration Screen -->
+    <div id="registerScreen" class="screen">
+      <div class="card">
+        <h1>📝 Register</h1>
+        <p class="subtitle">Create your secure account</p>
+        
+        <form id="registerForm">
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="regEmail" required placeholder="your.email@example.com">
+          </div>
+          
+          <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="regUsername" required placeholder="Choose a username">
+          </div>
+          
+          <button type="submit" class="btn btn-primary">
+            Register with Passkey
+          </button>
+          
+          <button type="button" id="backToLoginBtn" class="btn btn-link">
+            Back to Login
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- OTP Login Screen -->
+    <div id="otpScreen" class="screen">
+      <div class="card">
+        <h1>📱 OTP Login</h1>
+        <p class="subtitle">Fallback Authentication</p>
+        
+        <form id="otpRequestForm">
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="otpEmail" required placeholder="your.email@example.com">
+          </div>
+          
+          <button type="submit" class="btn btn-primary">
+            Send OTP
+          </button>
+          
+          <button type="button" id="backToLoginFromOtp" class="btn btn-link">
+            Back to Login
+          </button>
+        </form>
+        
+        <div id="otpVerifySection" style="display: none;">
+          <div class="form-group">
+            <label>Enter OTP</label>
+            <input type="text" id="otpCode" maxlength="6" placeholder="000000">
+          </div>
+          
+          <button id="verifyOtpBtn" class="btn btn-primary">
+            Verify OTP
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dashboard Screen -->
+    <div id="dashboardScreen" class="screen">
+      <div class="card">
+        <div class="dashboard-header">
+          <h1>👋 Welcome, <span id="username"></span></h1>
+          <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+        </div>
+        
+        <div class="access-level">
+          <h3>Access Level: <span id="accessLevel" class="badge"></span></h3>
+          <p id="riskInfo" class="risk-info"></p>
+        </div>
+
+        <!-- 🔒 SESSION MONITORING PANEL (NEW!) -->
+        <div class="session-monitor">
+          <h3>🔒 Session Protection Status</h3>
+          <div class="session-status-grid">
+            <div class="session-stat">
+              <div class="stat-icon">🔐</div>
+              <div class="stat-info">
+                <span class="stat-label">Session Token</span>
+                <span id="sessionTokenStatus" class="stat-value">Active</span>
+              </div>
+            </div>
+            
+            <div class="session-stat">
+              <div class="stat-icon">💻</div>
+              <div class="stat-info">
+                <span class="stat-label">Device Binding</span>
+                <span id="deviceBindingStatus" class="stat-value">Verified</span>
+              </div>
+            </div>
+            
+            <div class="session-stat">
+              <div class="stat-icon">⚠️</div>
+              <div class="stat-info">
+                <span class="stat-label">Risk Level</span>
+                <span id="riskLevelStatus" class="stat-value badge-low">LOW</span>
+              </div>
+            </div>
+            
+            <div class="session-stat">
+              <div class="stat-icon">🔄</div>
+              <div class="stat-info">
+                <span class="stat-label">Last Activity</span>
+                <span id="lastActivityStatus" class="stat-value">Just now</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Session Events Log (Real-time) -->
+          <div class="session-events">
+            <h4>📡 Session Events (Real-time)</h4>
+            <div id="sessionEventsContainer" class="events-container">
+              <!-- Events will be added here dynamically -->
+            </div>
+          </div>
+
+          <!-- Active Sessions Display -->
+          <div class="active-sessions">
+            <h4>📱 Active Sessions</h4>
+            <div id="activeSessionsContainer" class="sessions-list">
+              <!-- Sessions will be listed here -->
+            </div>
+          </div>
+        </div>
+        
+        <div class="actions">
+          <h3>Available Actions</h3>
+          
+          <div class="action-grid">
+            <button id="viewDataBtn" class="action-btn">
+              <span class="icon">📊</span>
+              <span>View Data</span>
+            </button>
+            
+            <button id="changeEmailBtn" class="action-btn sensitive">
+              <span class="icon">✉️</span>
+              <span>Change Email</span>
+              <span class="badge-small">Requires Verification</span>
+            </button>
+            
+            <button id="exportDataBtn" class="action-btn sensitive">
+              <span class="icon">📥</span>
+              <span>Export Data</span>
+              <span class="badge-small">Requires Verification</span>
+            </button>
+            
+            <button id="viewLogsBtn" class="action-btn">
+              <span class="icon">📋</span>
+              <span>Security Logs</span>
+            </button>
+          </div>
+        </div>
+        
+        <div id="auditLogs" class="audit-logs" style="display: none;">
+          <h3>Security Audit Logs</h3>
+          <div id="logsContainer"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step-Up Authentication Modal -->
+    <div id="stepUpModal" class="modal">
+      <div class="modal-content">
+        <h2>🔒 Additional Verification Required</h2>
+        <p>This action requires additional authentication for security.</p>
+        
+        <div class="form-group">
+          <label>Enter OTP sent to your email</label>
+          <input type="text" id="stepUpOtp" maxlength="6" placeholder="000000">
+        </div>
+        
+        <div class="modal-actions">
+          <button id="verifyStepUpBtn" class="btn btn-primary">Verify</button>
+          <button id="cancelStepUpBtn" class="btn btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification" class="notification"></div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

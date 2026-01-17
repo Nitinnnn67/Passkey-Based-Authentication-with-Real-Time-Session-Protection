@@ -1,0 +1,9 @@
+{
+  "watch": ["server/**/*.js"],
+  "ignore": ["*.json", "*.db", "auth.json", "node_modules/**", "client/**"],
+  "ext": "js",
+  "delay": "2000",
+  "env": {
+    "NODE_ENV": "development"
+  }
+}

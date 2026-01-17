@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: passkey-auth-system
+    env: node
+    region: singapore
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: RP_ID
+        sync: false
+      - key: RP_NAME
+        sync: false
+      - key: RP_ORIGIN
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
