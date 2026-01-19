@@ -177,6 +177,16 @@
           <h3>Available Actions</h3>
           
           <div class="action-grid">
+            <button id="addPasskeyBtn" class="action-btn" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+              <span class="icon">🔑</span>
+              <span>Add Passkey to This Device</span>
+            </button>
+            
+            <button id="managePasskeysBtn" class="action-btn">
+              <span class="icon">🔐</span>
+              <span>Manage Passkeys</span>
+            </button>
+            
             <button id="viewDataBtn" class="action-btn">
               <span class="icon">📊</span>
               <span>View Data</span>
@@ -222,6 +232,22 @@
         <div class="modal-actions">
           <button id="verifyStepUpBtn" class="btn btn-primary">Verify</button>
           <button id="cancelStepUpBtn" class="btn btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manage Passkeys Modal -->
+    <div id="passkeysModal" class="modal">
+      <div class="modal-content" style="max-width: 600px;">
+        <h2>🔐 Manage Your Passkeys</h2>
+        <p>Passkeys registered for your account</p>
+        
+        <div id="passkeysListContainer" style="margin: 20px 0;">
+          <!-- Passkeys will be listed here -->
+        </div>
+        
+        <div class="modal-actions">
+          <button id="closePasskeysBtn" class="btn btn-secondary">Close</button>
         </div>
       </div>
     </div>

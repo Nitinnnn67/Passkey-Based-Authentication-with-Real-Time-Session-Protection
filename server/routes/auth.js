@@ -975,4 +975,280 @@ router.post('/logout', (req, res) => {
   res.json({ success: true });
 });
 
+/**
+ * Add Passkey to Existing Account - Generate Options
+ */
+router.post('/passkey/add-options', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email required' });
+    }
+    
+    // Check if user exists
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Generate registration options for additional passkey
+    const userIDBuffer = Buffer.from(email);
+    
+    const options = await generateRegistrationOptions({
+      rpName,
+      rpID,
+      userID: new Uint8Array(userIDBuffer),
+      userName: user.username,
+      userDisplayName: user.username,
+      attestationType: 'none',
+      authenticatorSelection: {
+        residentKey: 'preferred',
+        userVerification: 'preferred',
+        authenticatorAttachment: undefined // Allow any authenticator
+      },
+      // Exclude already registered credentials
+      excludeCredentials: db.prepare('SELECT id FROM credentials WHERE user_id = ?')
+        .all(user.id)
+        .map(cred => ({
+          id: cred.id,
+          type: 'public-key'
+        }))
+    });
+    
+    // Store challenge
+    challenges.set(`add-passkey-${email}`, options.challenge);
+    
+    logAuditEvent({
+      userId: user.id,
+      email,
+      event: 'Add Passkey Started',
+      details: 'User initiated adding new passkey to account',
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+    
+    res.json(options);
+  } catch (error) {
+    console.error('Add passkey options error:', error);
+    res.status(500).json({ error: 'Failed to generate options', details: error.message });
+  }
+});
+
+/**
+ * Add Passkey to Existing Account - Verify
+ */
+router.post('/passkey/add-verify', async (req, res) => {
+  try {
+    const { email, credential, deviceName } = req.body;
+    
+    const expectedChallenge = challenges.get(`add-passkey-${email}`);
+    if (!expectedChallenge) {
+      return res.status(400).json({ error: 'Challenge not found' });
+    }
+    
+    // Verify registration response
+    const verification = await verifyRegistrationResponse({
+      response: credential,
+      expectedChallenge,
+      expectedOrigin: origin,
+      expectedRPID: rpID
+    });
+    
+    if (!verification.verified) {
+      logAuditEvent({
+        email,
+        event: 'Add Passkey Failed',
+        details: 'Credential verification failed',
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        success: false
+      });
+      return res.status(400).json({ error: 'Verification failed' });
+    }
+    
+    // Get user
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Store new credential
+    const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
+    const credId = Buffer.from(credentialID).toString('base64url');
+    
+    console.log('💾 Storing additional credential ID:', credId);
+    
+    const transports = credential.response.transports || ['hybrid', 'internal'];
+    
+    db.prepare(`
+      INSERT INTO credentials (id, user_id, public_key, counter, transports)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(
+      credId,
+      user.id,
+      Buffer.from(credentialPublicKey).toString('base64'),
+      counter,
+      JSON.stringify(transports)
+    );
+    
+    // Clean up challenge
+    challenges.delete(`add-passkey-${email}`);
+    
+    logAuditEvent({
+      userId: user.id,
+      email,
+      event: 'Passkey Added',
+      details: `New passkey registered for ${deviceName || 'device'}`,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+    
+    res.json({ 
+      success: true,
+      message: 'Passkey added successfully'
+    });
+  } catch (error) {
+    console.error('Add passkey verify error:', error);
+    res.status(500).json({ error: 'Failed to add passkey' });
+  }
+});
+
+/**
+ * List User's Passkeys
+ */
+router.get('/passkeys/list', (req, res) => {
+  try {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    const passkeys = db.prepare(`
+      SELECT id, created_at, transports
+      FROM credentials
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+    `).all(req.session.userId);
+    
+    res.json(passkeys);
+  } catch (error) {
+    console.error('List passkeys error:', error);
+    res.status(500).json({ error: 'Failed to fetch passkeys' });
+  }
+});
+
+/**
+ * Delete Passkey
+ */
+router.post('/passkeys/delete', (req, res) => {
+  try {
+    const { credentialId } = req.body;
+    
+    if (!req.session.userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    // Check if user has more than one passkey
+    const count = db.prepare('SELECT COUNT(*) as count FROM credentials WHERE user_id = ?')
+      .get(req.session.userId).count;
+    
+    if (count <= 1) {
+      return res.status(400).json({ error: 'Cannot delete last passkey' });
+    }
+    
+    // Delete credential
+    db.prepare('DELETE FROM credentials WHERE id = ? AND user_id = ?')
+      .run(credentialId, req.session.userId);
+    
+    logAuditEvent({
+      userId: req.session.userId,
+      email: req.session.email,
+      event: 'Passkey Deleted',
+      details: `Passkey ${credentialId.substring(0, 16)}... was removed`,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete passkey error:', error);
+    res.status(500).json({ error: 'Failed to delete passkey' });
+  }
+});
+
+/**
+ * Step-Up Authentication - Request
+ */
+router.post('/stepup/request', (req, res) => {
+  try {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    const { action } = req.body;
+    
+    // Generate OTP for step-up authentication
+    const email = req.session.email;
+    const otp = generateOTP(email);
+    
+    logAuditEvent({
+      userId: req.session.userId,
+      email,
+      event: 'Step-Up Auth Requested',
+      details: `User requested step-up authentication for: ${action}`,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+    
+    console.log(`🔒 Step-up OTP for ${email}: ${otp}`);
+    
+    res.json({ success: true, message: 'OTP sent' });
+  } catch (error) {
+    console.error('Step-up request error:', error);
+    res.status(500).json({ error: 'Failed to request step-up authentication' });
+  }
+});
+
+/**
+ * Step-Up Authentication - Verify
+ */
+router.post('/stepup/verify', (req, res) => {
+  try {
+    if (!req.session.userId) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    const { otp, action } = req.body;
+    const email = req.session.email;
+    
+    // Verify OTP
+    if (!verifyOTP(email, otp)) {
+      logAuditEvent({
+        userId: req.session.userId,
+        email,
+        event: 'Step-Up Auth Failed',
+        details: `Invalid OTP for action: ${action}`,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        success: false
+      });
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+    
+    logAuditEvent({
+      userId: req.session.userId,
+      email,
+      event: 'Step-Up Auth Success',
+      details: `Step-up authentication completed for: ${action}`,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+    
+    res.json({ success: true, message: 'Verification successful' });
+  } catch (error) {
+    console.error('Step-up verify error:', error);
+    res.status(500).json({ error: 'Failed to verify step-up authentication' });
+  }
+});
+
 export default router;

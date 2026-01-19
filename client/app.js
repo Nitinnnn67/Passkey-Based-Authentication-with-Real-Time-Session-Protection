@@ -60,6 +60,8 @@ function initializeEventListeners() {
   
   // Dashboard
   document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+  document.getElementById('addPasskeyBtn').addEventListener('click', handleAddPasskey);
+  document.getElementById('managePasskeysBtn').addEventListener('click', handleManagePasskeys);
   document.getElementById('viewDataBtn').addEventListener('click', () => showNotification('Data viewing access granted!', 'success'));
   document.getElementById('changeEmailBtn').addEventListener('click', () => handleSensitiveAction('change-email'));
   document.getElementById('exportDataBtn').addEventListener('click', () => handleSensitiveAction('export-data'));
@@ -68,6 +70,9 @@ function initializeEventListeners() {
   // Step-up modal
   document.getElementById('verifyStepUpBtn').addEventListener('click', handleStepUpVerify);
   document.getElementById('cancelStepUpBtn').addEventListener('click', hideStepUpModal);
+  
+  // Passkeys modal
+  document.getElementById('closePasskeysBtn').addEventListener('click', hidePasskeysModal);
 }
 
 // Screen navigation
@@ -826,5 +831,175 @@ function handleSessionError(errorData) {
  */
 function handleSessionExpired() {
   handleSessionError({ reason: 'SESSION_EXPIRED' });
+}
+
+// =======================================
+// 🔑 PASSKEY MANAGEMENT FUNCTIONS
+// =======================================
+
+/**
+ * Add new passkey to current device
+ */
+async function handleAddPasskey() {
+  if (!currentUser) {
+    showNotification('Please login first', 'error');
+    return;
+  }
+  
+  try {
+    showNotification('Starting passkey registration for this device...', 'success');
+    
+    // Get registration options for additional passkey
+    const optionsRes = await fetch(`${API_URL}/auth/passkey/add-options`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ 
+        email: currentUser.email,
+        deviceName: `${getOSName()} - ${getBrowserName()}`
+      })
+    });
+    
+    if (!optionsRes.ok) {
+      const error = await optionsRes.json();
+      throw new Error(error.error || 'Failed to get registration options');
+    }
+    
+    const options = await optionsRes.json();
+    
+    // Start WebAuthn registration
+    const credential = await startRegistration(options);
+    
+    // Verify and store new passkey
+    const verifyRes = await fetch(`${API_URL}/auth/passkey/add-verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ 
+        email: currentUser.email,
+        credential,
+        deviceName: `${getOSName()} - ${getBrowserName()}`
+      })
+    });
+    
+    if (!verifyRes.ok) {
+      throw new Error('Failed to verify passkey');
+    }
+    
+    showNotification('✅ Passkey added to this device! You can now use it to login.', 'success');
+    
+    // Add session event
+    addSessionEvent(
+      '🔑 New Passkey Added',
+      `Passkey registered for ${getOSName()} - ${getBrowserName()}`,
+      'success'
+    );
+    
+  } catch (error) {
+    console.error('Add passkey error:', error);
+    showNotification(`Failed to add passkey: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Manage passkeys - view and delete
+ */
+async function handleManagePasskeys() {
+  if (!currentUser) {
+    showNotification('Please login first', 'error');
+    return;
+  }
+  
+  try {
+    // Fetch user's passkeys
+    const res = await fetch(`${API_URL}/auth/passkeys/list`, {
+      credentials: 'include'
+    });
+    
+    if (!res.ok) {
+      throw new Error('Failed to fetch passkeys');
+    }
+    
+    const passkeys = await res.json();
+    
+    const container = document.getElementById('passkeysListContainer');
+    
+    if (passkeys.length === 0) {
+      container.innerHTML = '<p style="text-align: center; color: #999;">No passkeys registered</p>';
+    } else {
+      container.innerHTML = passkeys.map((pk, index) => `
+        <div style="padding: 15px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <div style="font-weight: bold; margin-bottom: 5px;">
+              🔑 Passkey ${index + 1}
+            </div>
+            <div style="font-size: 13px; color: #666;">
+              Added: ${new Date(pk.created_at).toLocaleDateString()}
+            </div>
+            <div style="font-size: 12px; color: #999; margin-top: 3px;">
+              ID: ${pk.id.substring(0, 16)}...
+            </div>
+          </div>
+          <button 
+            onclick="deletePasskey('${pk.id}')" 
+            class="btn btn-secondary"
+            style="padding: 8px 16px; font-size: 13px;"
+            ${passkeys.length === 1 ? 'disabled title="Cannot delete last passkey"' : ''}>
+            Delete
+          </button>
+        </div>
+      `).join('');
+    }
+    
+    showPasskeysModal();
+    
+  } catch (error) {
+    console.error('Manage passkeys error:', error);
+    showNotification(`Failed to load passkeys: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Delete a passkey
+ */
+window.deletePasskey = async function(credentialId) {
+  if (!confirm('Are you sure you want to delete this passkey? You won\'t be able to use it to login anymore.')) {
+    return;
+  }
+  
+  try {
+    const res = await fetch(`${API_URL}/auth/passkeys/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ credentialId })
+    });
+    
+    if (!res.ok) {
+      throw new Error('Failed to delete passkey');
+    }
+    
+    showNotification('✅ Passkey deleted successfully', 'success');
+    hidePasskeysModal();
+    
+    // Add session event
+    addSessionEvent(
+      '🗑️ Passkey Removed',
+      'A passkey was deleted from your account',
+      'warning'
+    );
+    
+  } catch (error) {
+    console.error('Delete passkey error:', error);
+    showNotification(`Failed to delete passkey: ${error.message}`, 'error');
+  }
+}
+
+function showPasskeysModal() {
+  document.getElementById('passkeysModal').classList.add('active');
+}
+
+function hidePasskeysModal() {
+  document.getElementById('passkeysModal').classList.remove('active');
 }
 
