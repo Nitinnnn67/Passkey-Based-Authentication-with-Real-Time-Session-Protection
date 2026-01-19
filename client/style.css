@@ -707,6 +707,67 @@ h1 {
   font-size: 13px;
 }
 
+/* Event items */
+.event-item {
+  padding: 12px;
+  border-left: 3px solid #e2e8f0;
+  background: #f8f9fa;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  position: relative;
+}
+
+.event-item.success {
+  border-left-color: var(--success);
+  background: #10b98110;
+}
+
+.event-item.info {
+  border-left-color: var(--primary);
+  background: #6366f110;
+}
+
+.event-item.warning {
+  border-left-color: var(--warning);
+  background: #f59e0b10;
+}
+
+.event-item.danger {
+  border-left-color: var(--danger);
+  background: #ef444410;
+}
+
+.event-message {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.event-time {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 11px;
+  color: var(--text-light);
+}
+
+.events-container {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 10px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.sessions-list {
+  padding: 10px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
 /* Pulse animation for real-time updates */
 @keyframes pulse {
   0%, 100% {

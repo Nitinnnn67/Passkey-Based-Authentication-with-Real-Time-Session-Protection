@@ -14,6 +14,13 @@
         <h1>🔐 Secure Login</h1>
         <p class="subtitle">Passkey-Based Authentication</p>
         
+        <form id="loginForm">
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="loginEmail" required placeholder="your.email@example.com">
+          </div>
+        </form>
+        
         <div class="login-methods">
           <button id="passkeyLoginBtn" class="btn btn-primary">
             <span class="icon">🔑</span>
@@ -194,9 +201,9 @@
           </div>
         </div>
         
-        <div id="auditLogs" class="audit-logs" style="display: none;">
-          <h3>Security Audit Logs</h3>
-          <div id="logsContainer"></div>
+        <div id="auditLogs" class="audit-logs" style="display: none; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 12px;">
+          <h3 style="margin-bottom: 20px;">Security Audit Logs</h3>
+          <div id="logsContainer" style="max-height: 400px; overflow-y: auto;"></div>
         </div>
       </div>
     </div>

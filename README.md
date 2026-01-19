@@ -68,6 +68,24 @@ A comprehensive authentication system implementing WebAuthn (Passkeys), risk-bas
   - User agent
   - Success/failure status
 
+### 🔐 Step 7: Single Session Per Account
+- **Strict Session Enforcement**:
+  - Only ONE active session allowed per user account
+  - Logging in from new device automatically logs out all previous sessions
+  - Immediate session invalidation for security
+  - Users are notified when previous sessions are terminated
+- **Security Benefits**:
+  - Prevents credential sharing
+  - Immediate revocation on suspicious activity
+  - Complete audit trail of session invalidations
+  - Protection against session hijacking
+- **Session Tracking**:
+  - Device fingerprinting and binding
+  - Browser and OS detection
+  - IP address monitoring
+  - Risk-based session management
+- 📖 **[Full Documentation](SINGLE_SESSION_GUIDE.md)**
+
 ## 🏗️ Project Structure
 
 ```
@@ -383,5 +401,6 @@ For issues or questions:
 ---
 
 **Built with ❤️ using WebAuthn, Express.js, and Vanilla JavaScript**
-#   P a s s k e y - B a s e d - A u t h e n t i c a t i o n - w i t h - R e a l - T i m e - S e s s i o n - P r o t e c t i o n  
+#   P a s s k e y - B a s e d - A u t h e n t i c a t i o n - w i t h - R e a l - T i m e - S e s s i o n - P r o t e c t i o n 
+ 
  

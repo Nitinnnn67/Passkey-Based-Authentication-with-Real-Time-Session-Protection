@@ -76,7 +76,9 @@ router.post('/register/options', async (req, res) => {
       authenticatorSelection: {
         residentKey: 'preferred',
         userVerification: 'preferred',
-        authenticatorAttachment: 'platform'
+        // Allow both platform (device) and cross-platform (portable) authenticators
+        // This enables passkey sync across devices via iCloud, Google, etc.
+        authenticatorAttachment: undefined // Don't restrict - allow any authenticator
       }
     });
 
@@ -96,7 +98,10 @@ router.post('/register/options', async (req, res) => {
     res.json(options);
   } catch (error) {
     console.error('Registration options error:', error);
-    res.status(500).json({ error: 'Failed to generate registration options' });
+    res.status(500).json({ 
+      error: 'Failed to generate registration options',
+      details: error.message 
+    });
   }
 });
 
@@ -203,19 +208,71 @@ router.post('/register/verify', async (req, res) => {
  */
 router.post('/login/options', async (req, res) => {
   try {
-    // Generate authentication options
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email required' });
+    }
+    
+    // Check if user exists
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found. Please register first.' });
+    }
+    
+    // Get all credentials for this user (supports multiple devices)
+    const userCredentials = db.prepare('SELECT * FROM credentials WHERE user_id = ?').all(user.id);
+    
+    if (userCredentials.length === 0) {
+      return res.status(404).json({ 
+        error: 'No passkey found for this account',
+        message: 'Please register a passkey first or use OTP login'
+      });
+    }
+    
+    // Convert stored credentials to allowCredentials format
+    const allowCredentials = userCredentials.map(cred => {
+      try {
+        // Parse transports safely
+        let transports = ['internal', 'hybrid'];
+        if (cred.transports) {
+          try {
+            transports = typeof cred.transports === 'string' ? JSON.parse(cred.transports) : cred.transports;
+          } catch (e) {
+            console.warn('Failed to parse transports:', e);
+          }
+        }
+        
+        // Keep credential ID as base64url string (don't convert to Buffer)
+        return {
+          id: cred.id, // Already in base64url format
+          type: 'public-key',
+          transports
+        };
+      } catch (error) {
+        console.error('Error processing credential:', error);
+        return null;
+      }
+    }).filter(cred => cred !== null);
+    
+    if (allowCredentials.length === 0) {
+      return res.status(500).json({ error: 'Failed to process stored credentials' });
+    }
+    
+    // Generate authentication options with user's credentials
     const options = await generateAuthenticationOptions({
       rpID,
-      userVerification: 'preferred'
+      userVerification: 'preferred',
+      allowCredentials // Only allow this user's passkeys
     });
 
-    // Store challenge
-    challenges.set('login', options.challenge);
+    // Store challenge with email
+    challenges.set(`login-${email}`, options.challenge);
 
     res.json(options);
   } catch (error) {
     console.error('Login options error:', error);
-    res.status(500).json({ error: 'Failed to generate login options' });
+    res.status(500).json({ error: 'Failed to generate login options', details: error.message });
   }
 });
 
@@ -224,28 +281,29 @@ router.post('/login/options', async (req, res) => {
  */
 router.post('/login/verify', async (req, res) => {
   try {
-    const { credential } = req.body;
+    const { credential, email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email required' });
+    }
 
-    const expectedChallenge = challenges.get('login');
+    const expectedChallenge = challenges.get(`login-${email}`);
     if (!expectedChallenge) {
-      return res.status(400).json({ error: 'Challenge not found' });
+      return res.status(400).json({ error: 'Challenge not found or expired' });
     }
 
     // Get credential from database
-    // credential.rawId is already base64-encoded from the browser
     const credId = credential.rawId;
     console.log('🔍 Looking for credential ID:', credId);
     
     const storedCred = db.prepare('SELECT * FROM credentials WHERE id = ?').get(credId);
     
     if (!storedCred) {
-      // Debug: show all stored credential IDs
-      const allCreds = db.prepare('SELECT id FROM credentials').all();
-      console.log('❌ Credential not found. Available credentials:', allCreds.map(c => c.id));
-      console.log('🔍 Searched for:', credId);
+      console.log('❌ Credential not found:', credId);
       logAuditEvent({
+        email,
         event: 'Login Failed',
-        details: 'Credential not found',
+        details: 'Credential not found or doesn\'t belong to this user',
         ipAddress: req.ip,
         userAgent: req.headers['user-agent'],
         success: false
@@ -353,10 +411,11 @@ router.post('/login/verify', async (req, res) => {
 
     // 🔹 STEP A: Create Session (After Successful Login)
     // Bind session to device/browser context
+    // 🔐 This will automatically invalidate any previous sessions
     const sessionData = createSession(user.id, user.email, req, riskAnalysis.score);
 
     // Clean up challenge
-    challenges.delete('login');
+    challenges.delete(`login-${email}`);
 
     console.log(`✅ Login successful: ${user.email} on ${sessionData.riskLevel} risk session`);
 
@@ -376,7 +435,11 @@ router.post('/login/verify', async (req, res) => {
         expiresIn: sessionData.expiresIn,
         deviceBound: sessionData.deviceBound,
         riskLevel: sessionData.riskLevel
-      }
+      },
+      // Notify user if previous sessions were logged out
+      message: sessionData.previousSessionsInvalidated > 0 
+        ? `Login successful. ${sessionData.previousSessionsInvalidated} previous session(s) from other device(s) have been logged out.`
+        : 'Login successful'
     });
   } catch (error) {
     console.error('Login verification error:', error);
@@ -547,6 +610,7 @@ router.post('/otp/verify', async (req, res) => {
 
     // 🔹 STEP A: Create Session (OTP Login - Higher Risk)
     // Mark as fallback authentication
+    // 🔐 This will automatically invalidate any previous sessions
     const sessionData = createSession(user.id, user.email, req, riskAnalysis.score);
 
     console.log(`✅ OTP Login successful: ${user.email} on ${sessionData.riskLevel} risk session`);
@@ -567,7 +631,11 @@ router.post('/otp/verify', async (req, res) => {
         expiresIn: sessionData.expiresIn,
         riskLevel: sessionData.riskLevel,
         limitedAccess: sessionData.riskLevel === 'HIGH'
-      }
+      },
+      // Notify user if previous sessions were logged out
+      message: sessionData.previousSessionsInvalidated > 0 
+        ? `Login successful. ${sessionData.previousSessionsInvalidated} previous session(s) from other device(s) have been logged out.`
+        : 'Login successful'
     });
   } catch (error) {
     console.error('OTP verification error:', error);

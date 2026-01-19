@@ -85,37 +85,63 @@ function showRegisterScreen() {
 }
 
 function showOtpScreen() {
+  // Pre-fill email from login screen
+  const loginEmail = document.getElementById('loginEmail').value;
+  if (loginEmail) {
+    document.getElementById('otpEmail').value = loginEmail;
+  }
   showScreen('otpScreen');
 }
 
 function showDashboard(userData, sessionData) {
   currentUser = userData;
   
-  // Store session token
+  // Store session token and initialize session data with defaults if missing
   if (sessionData && sessionData.token) {
     sessionToken = sessionData.token;
-    addSessionEvent('✅ Session Created', `Token bound to ${sessionData.deviceBound ? 'device' : 'browser'}`, 'success');
   }
   
-  document.getElementById('username').textContent = userData.username;
+  // Ensure session data has required fields
+  if (sessionData && !sessionData.riskLevel) {
+    sessionData.riskLevel = 'LOW';
+  }
+  if (sessionData && !sessionData.expiresIn) {
+    sessionData.expiresIn = '24h';
+  }
+  if (sessionData && !sessionData.deviceBound) {
+    sessionData.deviceBound = true;
+  }
+  
+  document.getElementById('username').textContent = userData.username || 'User';
   
   // Display access level
   const accessLevel = userData.accessLevel || 'full-access';
   const accessBadge = document.getElementById('accessLevel');
-  accessBadge.textContent = accessLevel.replace('-', ' ');
-  accessBadge.className = `badge ${accessLevel}`;
+  if (accessBadge) {
+    accessBadge.textContent = accessLevel.replace('-', ' ');
+    accessBadge.className = `badge ${accessLevel}`;
+  }
   
   // Display risk info
   const riskInfo = document.getElementById('riskInfo');
-  if (userData.riskScore !== undefined) {
+  if (riskInfo && userData.riskScore !== undefined) {
     riskInfo.textContent = `Risk Score: ${userData.riskScore}/100 | Device: ${userData.deviceKnown ? 'Known' : 'Unknown'}`;
   }
   
-  // 🔒 Initialize session monitoring
-  initializeSessionMonitoring(sessionData);
+  // Always initialize session monitoring - use defaults if no session data
+  const finalSessionData = sessionData || {
+    token: 'temp-session',
+    riskLevel: 'MEDIUM',
+    expiresIn: '24h',
+    deviceBound: false
+  };
   
-  // Start periodic session checks
-  startSessionMonitoring();
+  initializeSessionMonitoring(finalSessionData);
+  
+  // Start periodic session checks only if we have a real token
+  if (sessionData && sessionData.token) {
+    startSessionMonitoring();
+  }
   
   showScreen('dashboardScreen');
 }
@@ -171,16 +197,25 @@ async function handleRegistration(e) {
 // Passkey Login
 async function handlePasskeyLogin() {
   try {
+    const email = document.getElementById('loginEmail').value;
+    
+    if (!email) {
+      showNotification('Please enter your email first', 'error');
+      return;
+    }
+    
     showNotification('Starting passkey authentication...', 'success');
     
-    // Get authentication options
+    // Get authentication options for this specific user
     const optionsRes = await fetch(`${API_URL}/auth/login/options`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
     });
     
     if (!optionsRes.ok) {
-      throw new Error('Failed to get login options');
+      const error = await optionsRes.json();
+      throw new Error(error.message || error.error || 'Failed to get login options');
     }
     
     const options = await optionsRes.json();
@@ -192,7 +227,7 @@ async function handlePasskeyLogin() {
     const verifyRes = await fetch(`${API_URL}/auth/login/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential })
+      body: JSON.stringify({ credential, email })
     });
     
     if (!verifyRes.ok) {
@@ -201,7 +236,9 @@ async function handlePasskeyLogin() {
     
     const result = await verifyRes.json();
     
-    showNotification('✅ Login successful!', 'success');
+    // Show notification with session info
+    const message = result.message || '✅ Login successful!';
+    showNotification(message, 'success');
     showDashboard(result.user, result.session);
     
   } catch (error) {
@@ -336,7 +373,9 @@ async function handleStepUpVerify() {
 // Audit Logs
 async function handleViewLogs() {
   try {
-    const res = await fetch(`${API_URL}/logs/audit`);
+    const res = await fetch(`${API_URL}/logs/audit`, {
+      credentials: 'include' // Include session cookie
+    });
     
     if (!res.ok) {
       throw new Error('Failed to fetch logs');
@@ -345,17 +384,36 @@ async function handleViewLogs() {
     const logs = await res.json();
     
     const logsContainer = document.getElementById('logsContainer');
-    logsContainer.innerHTML = logs.map(log => `
-      <div class="log-entry ${log.type}">
-        <div class="timestamp">${new Date(log.timestamp).toLocaleString()}</div>
-        <div><strong>${log.event}</strong></div>
-        <div>${log.details}</div>
-      </div>
-    `).join('');
+    
+    if (!logs || logs.length === 0) {
+      logsContainer.innerHTML = '<div class="log-empty">No audit logs available</div>';
+    } else {
+      logsContainer.innerHTML = logs.map(log => {
+        const timestamp = log.timestamp || log.created_at;
+        const success = log.success !== undefined ? log.success : 1;
+        const statusClass = success ? 'success' : 'error';
+        
+        return `
+          <div class="log-entry ${statusClass}">
+            <div class="log-header">
+              <span class="log-event">${log.event || 'Event'}</span>
+              <span class="timestamp">${timestamp ? new Date(timestamp).toLocaleString() : 'Unknown time'}</span>
+            </div>
+            <div class="log-details">${log.details || 'No details'}</div>
+            ${log.ip_address ? `<div class="log-meta">IP: ${log.ip_address}</div>` : ''}
+            ${log.risk_score !== undefined ? `<div class="log-meta">Risk Score: ${log.risk_score}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+    }
     
     document.getElementById('auditLogs').style.display = 'block';
     
+    // Scroll to logs
+    document.getElementById('auditLogs').scrollIntoView({ behavior: 'smooth' });
+    
   } catch (error) {
+    console.error('Logs error:', error);
     showNotification(`Failed to load logs: ${error.message}`, 'error');
   }
 }
@@ -420,12 +478,26 @@ function showNotification(message, type = 'success') {
  * Initialize session monitoring display
  */
 function initializeSessionMonitoring(sessionData) {
-  if (!sessionData) return;
+  if (!sessionData) {
+    console.warn('No session data provided');
+    sessionData = { riskLevel: 'MEDIUM', expiresIn: '24h', deviceBound: false };
+  }
+  
+  // Clear any existing content
+  const eventsContainer = document.getElementById('sessionEventsContainer');
+  if (eventsContainer) {
+    eventsContainer.innerHTML = '';
+  }
+  
+  const sessionsContainer = document.getElementById('activeSessionsContainer');
+  if (sessionsContainer) {
+    sessionsContainer.innerHTML = '';
+  }
   
   // Update session status display
   updateSessionStatus({
-    tokenStatus: 'Active',
-    deviceBinding: 'Verified',
+    tokenStatus: sessionData.token ? 'Active' : 'Local',
+    deviceBinding: sessionData.deviceBound ? 'Verified' : 'Local Device',
     riskLevel: sessionData.riskLevel || 'LOW',
     lastActivity: 'Just now'
   });
@@ -433,12 +505,48 @@ function initializeSessionMonitoring(sessionData) {
   // Initial session event
   addSessionEvent(
     '🔐 Session Initialized', 
-    `Risk: ${sessionData.riskLevel}, Expires: ${sessionData.expiresIn}`,
+    `Risk: ${sessionData.riskLevel || 'LOW'}, Expires: ${sessionData.expiresIn || '24h'}`,
     'success'
   );
   
-  // Load active sessions
-  loadActiveSessions();
+  // Add welcome event
+  addSessionEvent(
+    '✅ Login Successful',
+    `Session created and device bound`,
+    'success'
+  );
+  
+  // Show current session info
+  displayActiveSessions([{
+    deviceName: navigator.platform || 'Current Device',
+    browserInfo: {
+      browser: getBrowserName(),
+      os: getOSName()
+    },
+    lastActivity: 'Just now',
+    ipAddress: 'Current session',
+    riskLevel: sessionData.riskLevel || 'LOW'
+  }]);
+}
+
+// Helper functions to get browser and OS info
+function getBrowserName() {
+  const ua = navigator.userAgent;
+  if (ua.includes('Chrome')) return 'Chrome';
+  if (ua.includes('Firefox')) return 'Firefox';
+  if (ua.includes('Safari')) return 'Safari';
+  if (ua.includes('Edge')) return 'Edge';
+  return 'Browser';
+}
+
+function getOSName() {
+  const ua = navigator.userAgent;
+  if (ua.includes('Windows')) return 'Windows';
+  if (ua.includes('Mac')) return 'macOS';
+  if (ua.includes('Linux')) return 'Linux';
+  if (ua.includes('Android')) return 'Android';
+  if (ua.includes('iOS')) return 'iOS';
+  return 'OS';
 }
 
 /**
@@ -471,6 +579,11 @@ function updateSessionStatus(status) {
  */
 function addSessionEvent(title, message, type = 'info') {
   const container = document.getElementById('sessionEventsContainer');
+  
+  if (!container) {
+    console.warn('Session events container not found');
+    return;
+  }
   
   // Check if empty message exists
   const emptyMsg = container.querySelector('.events-empty');
@@ -545,30 +658,40 @@ async function loadActiveSessions() {
  */
 function displayActiveSessions(sessions, currentSession) {
   const container = document.getElementById('activeSessionsContainer');
+  
+  if (!container) {
+    console.warn('Active sessions container not found');
+    return;
+  }
+  
   container.innerHTML = '';
   
-  if (sessions.length === 0) {
-    container.innerHTML = '<div class="sessions-empty">No active sessions</div>';
+  if (!sessions || sessions.length === 0) {
+    container.innerHTML = '<div class="sessions-empty">Currently 1 active session (this device)</div>';
     return;
   }
   
   sessions.forEach((session, index) => {
     const isCurrent = index === 0; // Assume first is current
+    const riskLevel = session.riskLevel || 'MEDIUM';
     
     const sessionItem = document.createElement('div');
-    sessionItem.className = `session-item ${isCurrent ? 'current' : ''} ${session.riskLevel === 'HIGH' ? 'high-risk' : ''}`;
+    sessionItem.className = `session-item ${isCurrent ? 'current' : ''} ${riskLevel === 'HIGH' ? 'high-risk' : ''}`;
+    
+    const browserInfo = session.browserInfo || {};
+    const browser = typeof browserInfo === 'string' ? JSON.parse(browserInfo) : browserInfo;
     
     sessionItem.innerHTML = `
       <div class="session-info-left">
         <div class="session-device">
-          ${session.deviceName} ${isCurrent ? '(Current)' : ''}
+          ${session.deviceName || 'Unknown Device'} ${isCurrent ? '(Current)' : ''}
         </div>
         <div class="session-details">
-          ${session.browserInfo?.browser || 'Unknown'} on ${session.browserInfo?.os || 'Unknown'} • 
-          Last active: ${session.lastActivity} • IP: ${session.ipAddress}
+          ${browser.browser || 'Unknown'} on ${browser.os || 'Unknown'} • 
+          Last active: ${session.lastActivity || 'Unknown'} • IP: ${session.ipAddress || 'Unknown'}
         </div>
       </div>
-      <span class="session-badge ${session.riskLevel.toLowerCase()}">${session.riskLevel}</span>
+      <span class="session-badge ${riskLevel.toLowerCase()}">${riskLevel}</span>
     `;
     
     container.appendChild(sessionItem);

@@ -18,8 +18,12 @@ const activeSessions = new Map();
  * 🔹 STEP A: Create Session (After Successful Login)
  * 
  * Session token generate + device/browser context bind
+ * 🔐 SINGLE SESSION ENFORCEMENT: Invalidates all previous sessions for this user
  */
 export function createSession(userId, email, req, riskScore) {
+  // 🔐 ENFORCE SINGLE SESSION: Invalidate all existing sessions for this user
+  const invalidatedCount = invalidateAllUserSessions(userId, 'NEW_LOGIN_FROM_ANOTHER_DEVICE');
+  
   // Generate secure session token
   const sessionToken = crypto.randomBytes(32).toString('hex');
   
@@ -83,7 +87,8 @@ export function createSession(userId, email, req, riskScore) {
     sessionToken,
     expiresIn: '24h',
     deviceBound: true,
-    riskLevel: sessionContext.currentRiskLevel
+    riskLevel: sessionContext.currentRiskLevel,
+    previousSessionsInvalidated: invalidatedCount
   };
 }
 
@@ -226,6 +231,42 @@ export function rotateSession(oldToken, req) {
   console.log(`🔄 Session rotated (count: ${rotatedSession.rotationCount})`);
   
   return newToken;
+}
+
+/**
+ * Invalidate all sessions for a user (for single-session-per-account)
+ */
+export function invalidateAllUserSessions(userId, reason = 'NEW_LOGIN') {
+  let count = 0;
+  
+  // Invalidate all active sessions for this user
+  for (const [token, session] of activeSessions) {
+    if (session.userId === userId && session.isActive) {
+      session.isActive = false;
+      session.invalidatedAt = Date.now();
+      session.invalidationReason = reason;
+      
+      activeSessions.delete(token);
+      count++;
+      
+      // Mark as invalidated in DB
+      try {
+        db.prepare(`
+          UPDATE sessions 
+          SET is_active = 0, invalidated_at = ?, invalidation_reason = ?
+          WHERE session_id = ?
+        `).run(new Date().toISOString(), reason, token);
+      } catch (error) {
+        console.error('Session invalidation DB error:', error);
+      }
+    }
+  }
+  
+  if (count > 0) {
+    console.log(`🔒 Invalidated ${count} existing session(s) for user ${userId}: ${reason}`);
+  }
+  
+  return count;
 }
 
 /**

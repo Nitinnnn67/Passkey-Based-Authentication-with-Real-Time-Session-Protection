@@ -309,6 +309,24 @@ db.exec(`
     UNIQUE(user_id, device_fingerprint)
   );
 
+  -- Sessions table (for single-session-per-account enforcement)
+  CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT UNIQUE NOT NULL,
+    user_id INTEGER NOT NULL,
+    email TEXT NOT NULL,
+    device_fingerprint TEXT NOT NULL,
+    device_name TEXT,
+    browser_info TEXT,
+    ip_address TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    risk_level TEXT,
+    is_active INTEGER DEFAULT 1,
+    invalidated_at DATETIME,
+    invalidation_reason TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
   -- OTP storage table
   CREATE TABLE IF NOT EXISTS otps (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -360,6 +378,8 @@ db.exec(`
   -- Create indexes for performance
   CREATE INDEX IF NOT EXISTS idx_credentials_user_id ON credentials(user_id);
   CREATE INDEX IF NOT EXISTS idx_known_devices_user_id ON known_devices(user_id);
+  CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+  CREATE INDEX IF NOT EXISTS idx_sessions_session_id ON sessions(session_id);
   CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
   CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
   CREATE INDEX IF NOT EXISTS idx_otps_email ON otps(email);
