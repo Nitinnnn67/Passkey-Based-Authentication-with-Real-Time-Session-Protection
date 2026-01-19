@@ -8,15 +8,52 @@
 </head>
 <body>
   <div class="container">
-    <!-- Login Screen -->
+    <!-- Login Screen / Landing Page -->
     <div id="loginScreen" class="screen active">
-      <div class="card">
-        <h1>🔐 Secure Login</h1>
-        <p class="subtitle">Passkey-Based Authentication</p>
+      <!-- Hero Section -->
+      <div class="hero-section">
+        <div class="hero-content">
+          <h1 class="hero-title">🔐 Passkey Authentication System</h1>
+          <p class="hero-subtitle">Next-Generation Passwordless Security</p>
+          <p class="hero-description">
+            Experience the future of authentication with FIDO2/WebAuthn technology. 
+            Say goodbye to passwords and hello to biometric security.
+          </p>
+        </div>
+      </div>
+
+      <!-- Features Section -->
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🛡️</div>
+          <h3>Phishing-Resistant</h3>
+          <p>Cryptographic keys protect against phishing attacks and credential theft</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Lightning Fast</h3>
+          <p>Login in seconds with Face ID, Touch ID, or fingerprint</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🌍</div>
+          <h3>Multi-Device</h3>
+          <p>Use passkeys across all your devices with automatic sync</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Single Session</h3>
+          <p>Automatic logout from other devices for maximum security</p>
+        </div>
+      </div>
+
+      <!-- Login Card -->
+      <div class="card login-card">
+        <h2>Sign In to Your Account</h2>
+        <p class="subtitle">Enter your email to get started</p>
         
         <form id="loginForm">
           <div class="form-group">
-            <label>Email</label>
+            <label>📧 Email Address</label>
             <input type="email" id="loginEmail" required placeholder="your.email@example.com">
           </div>
         </form>
@@ -38,9 +75,37 @@
         </div>
         
         <div class="info-box">
-          <p>✨ <strong>New User?</strong> Register with passkey for seamless authentication</p>
-          <button id="registerBtn" class="btn btn-link">Create Account</button>
+          <p>✨ <strong>New User?</strong> Create an account in seconds with passkey</p>
+          <button id="registerBtn" class="btn btn-link">Create Account →</button>
         </div>
+      </div>
+
+      <!-- Technology Section -->
+      <div class="tech-info">
+        <h3>🔬 Powered By</h3>
+        <div class="tech-badges">
+          <span class="badge">FIDO2</span>
+          <span class="badge">WebAuthn</span>
+          <span class="badge">Biometric Auth</span>
+          <span class="badge">Zero Trust</span>
+        </div>
+        <p class="tech-description">
+          Built with industry-standard FIDO2/WebAuthn protocol. Your biometric data never leaves your device.
+          Passkeys use public-key cryptography for unbreakable security.
+        </p>
+      </div>
+
+      <!-- Security Features -->
+      <div class="security-features">
+        <h3>🛡️ Enterprise-Grade Security</h3>
+        <ul class="feature-list">
+          <li>✅ <strong>Device Fingerprinting:</strong> Track and identify trusted devices</li>
+          <li>✅ <strong>Risk Assessment:</strong> AI-powered threat detection</li>
+          <li>✅ <strong>Session Management:</strong> Real-time monitoring and control</li>
+          <li>✅ <strong>Audit Logging:</strong> Complete activity history</li>
+          <li>✅ <strong>Single-Session Policy:</strong> One active session per account</li>
+          <li>✅ <strong>Multi-Passkey Support:</strong> Register multiple devices</li>
+        </ul>
       </div>
     </div>
 

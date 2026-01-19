@@ -1117,10 +1117,19 @@ router.post('/passkey/add-verify', async (req, res) => {
 /**
  * List User's Passkeys
  */
-router.get('/passkeys/list', (req, res) => {
+router.get('/passkeys/list', async (req, res) => {
   try {
-    if (!req.session.userId) {
+    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!sessionToken) {
       return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    const { validateSession } = await import('../utils/sessionManager.js');
+    const validation = validateSession(sessionToken, req);
+    
+    if (!validation.valid) {
+      return res.status(401).json({ error: validation.reason || 'Session invalid' });
     }
     
     const passkeys = db.prepare(`
@@ -1128,7 +1137,7 @@ router.get('/passkeys/list', (req, res) => {
       FROM credentials
       WHERE user_id = ?
       ORDER BY created_at DESC
-    `).all(req.session.userId);
+    `).all(validation.session.userId);
     
     res.json(passkeys);
   } catch (error) {
@@ -1140,17 +1149,28 @@ router.get('/passkeys/list', (req, res) => {
 /**
  * Delete Passkey
  */
-router.post('/passkeys/delete', (req, res) => {
+router.post('/passkeys/delete', async (req, res) => {
   try {
     const { credentialId } = req.body;
+    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
     
-    if (!req.session.userId) {
+    if (!sessionToken) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
     
+    const { validateSession } = await import('../utils/sessionManager.js');
+    const validation = validateSession(sessionToken, req);
+    
+    if (!validation.valid) {
+      return res.status(401).json({ error: validation.reason || 'Session invalid' });
+    }
+    
+    const userId = validation.session.userId;
+    const email = validation.session.email;
+    
     // Check if user has more than one passkey
     const count = db.prepare('SELECT COUNT(*) as count FROM credentials WHERE user_id = ?')
-      .get(req.session.userId).count;
+      .get(userId).count;
     
     if (count <= 1) {
       return res.status(400).json({ error: 'Cannot delete last passkey' });
@@ -1158,11 +1178,11 @@ router.post('/passkeys/delete', (req, res) => {
     
     // Delete credential
     db.prepare('DELETE FROM credentials WHERE id = ? AND user_id = ?')
-      .run(credentialId, req.session.userId);
+      .run(credentialId, userId);
     
     logAuditEvent({
-      userId: req.session.userId,
-      email: req.session.email,
+      userId,
+      email,
       event: 'Passkey Deleted',
       details: `Passkey ${credentialId.substring(0, 16)}... was removed`,
       ipAddress: req.ip,
@@ -1179,20 +1199,30 @@ router.post('/passkeys/delete', (req, res) => {
 /**
  * Step-Up Authentication - Request
  */
-router.post('/stepup/request', (req, res) => {
+router.post('/stepup/request', async (req, res) => {
   try {
-    if (!req.session.userId) {
+    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!sessionToken) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
     
+    const { validateSession } = await import('../utils/sessionManager.js');
+    const validation = validateSession(sessionToken, req);
+    
+    if (!validation.valid) {
+      return res.status(401).json({ error: validation.reason || 'Session invalid' });
+    }
+    
     const { action } = req.body;
+    const email = validation.session.email;
+    const userId = validation.session.userId;
     
     // Generate OTP for step-up authentication
-    const email = req.session.email;
     const otp = generateOTP(email);
     
     logAuditEvent({
-      userId: req.session.userId,
+      userId,
       email,
       event: 'Step-Up Auth Requested',
       details: `User requested step-up authentication for: ${action}`,
@@ -1212,19 +1242,29 @@ router.post('/stepup/request', (req, res) => {
 /**
  * Step-Up Authentication - Verify
  */
-router.post('/stepup/verify', (req, res) => {
+router.post('/stepup/verify', async (req, res) => {
   try {
-    if (!req.session.userId) {
+    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!sessionToken) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
     
+    const { validateSession } = await import('../utils/sessionManager.js');
+    const validation = validateSession(sessionToken, req);
+    
+    if (!validation.valid) {
+      return res.status(401).json({ error: validation.reason || 'Session invalid' });
+    }
+    
     const { otp, action } = req.body;
-    const email = req.session.email;
+    const email = validation.session.email;
+    const userId = validation.session.userId;
     
     // Verify OTP
     if (!verifyOTP(email, otp)) {
       logAuditEvent({
-        userId: req.session.userId,
+        userId,
         email,
         event: 'Step-Up Auth Failed',
         details: `Invalid OTP for action: ${action}`,
@@ -1236,7 +1276,7 @@ router.post('/stepup/verify', (req, res) => {
     }
     
     logAuditEvent({
-      userId: req.session.userId,
+      userId,
       email,
       event: 'Step-Up Auth Success',
       details: `Step-up authentication completed for: ${action}`,
